@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head><title>ZIP viewer</title>
+<link rel="stylesheet" href="zip-viewer.css">
+<script src="zip-no-worker.min.js"></script>
+<script src="zip-viewer.js" defer></script>
+</head>
+<body>
+
+<h3>ZIP viewer</h3>
+<input type="file" id="src" accept=".zip" />
+<label>Password: <input type="password" id="pwd" /></label>
+<label>Extension alias: <input id="ext1" title="File extension" /><input id="ext2" value="txt" title="Well-known extension" /></label>
+<label>Filename encoding: <input id="enc" /></label>
+
+<ul id="tree"></ul>
+<span id="fn"></span>
+<div id="view"></div>
+
+</body>
+</html>
