@@ -18,11 +18,11 @@ setTimeout(() => {
 }, 999);
 zip.filenameEncoding = () => document.getElementById('enc').value;
 
-const createElement = (entry) => {
+const createElement = async (entry) => {
   const i = entry.uncompressedSize === 0 ? 0 : Math.floor(Math.log(entry.uncompressedSize) / Math.log(1024));
   const size = +((entry.uncompressedSize / Math.pow(1024, i)).toFixed(2)) * 1 + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
   const fn = document.getElementById('fn');
-  fn.textContent = '[' + size + '] ' + entry.filename;
+  fn.textContent = `[${size}] ${entry.filename}`;
   if (entry.uncompressedSize > 1024 * 1024 * 100) {
     if (!confirm(`The file size (${size}) is too large. Do you really want to view it?`)) {
       const span = document.createElement('span');
@@ -30,33 +30,28 @@ const createElement = (entry) => {
       return span;
     }
   }
-  const mimetype = zip.getMimeType(entry.filename);
   const opt = { password: document.getElementById('pwd').value };
-  switch (mimetype.split('/')[0]) {
-    case 'image': {
-      const image = new Image();
-      entry.getData(new zip.BlobWriter(mimetype), opt)
-        .then((blob) => {
-          image.src = URL.createObjectURL(blob);
-          image.addEventListener('load', () => URL.revokeObjectURL(image.src));
-        })
-        .catch(ex => alert(ex.message));
-      return image;
-    }
 
+  let blob = await entry.getData(new zip.BlobWriter(), opt);
+  let buf = await blob.arrayBuffer();
+  const mimetype = zip.getMimeType(buf);
+  switch (mimetype.split('/')[0]) {
     case 'text': {
       const text = document.createElement('textarea');
-      entry.getData(new zip.TextWriter(), opt)
-        .then(data => text.textContent = data)
-        .catch(ex => alert(ex.message));
+      text.textContent = new TextDecoder().decode(new Uint8Array(buf));
       return text;
     }
-
-    default: {
-      const span = document.createElement('span');
-      span.textContent = mimetype || 'Unknown file type. Maybe assign an extension alias?';
-      return span;
-    };
+    case 'image': {
+      const image = new Image();
+      try {
+        blob = blob.slice(0, blob.size, mimetype);
+      } catch (ex) {
+        blob = new Blob([buf], { type: mimetype });
+      }
+      image.src = URL.createObjectURL(blob);
+      image.addEventListener('load', () => URL.revokeObjectURL(image.src));
+      return image;
+    }
   }
 };
 
@@ -149,62 +144,48 @@ document.getElementById('src').onchange = async (e) => {
   tree.forEach(entry => populate(ul, entry));
 };
 
-zip.getMimeType = (filename) => {
-  filename = filename.split('/').at(-1);
-
-  let ext;
-  if (filename.indexOf('.') < 0) {
-    ext = '';
-  } else {
-    ext = filename.split('.').at(-1).toLowerCase();
+zip.getMimeType = (buf) => {
+  let a = new Uint8Array(buf, 0, 12);
+  if (a[0] === 0xFF && a[1] === 0xD8 && a[2] === 0xFF) return 'image/jpeg';
+  if (a[0] === 0x89 && a[1] === 0x50 && a[2] === 0x4E && a[3] === 0x47 && a[4] === 0x0D
+    && a[5] === 0x0A && a[6] === 0x1A && a[7] === 0x0A) return 'image/png';
+  if (a[0] === 0xFF && a[1] === 0x4F && a[2] === 0xFF && a[3] === 0x51
+    || a[0] === 0x00 && a[1] === 0x00 && a[2] === 0x00 && a[3] === 0x0C
+    && a[4] === 0x6A && a[5] === 0x50 && a[6] === 0x20 && a[7] === 0x20
+    && a[8] === 0x0D && a[9] === 0x0A && a[10] === 0x87 && a[11] === 0x0A) return 'image/jp2';
+  if (a[0] === 0x49 && a[1] === 0x49 && a[2] === 0x2A && a[3] === 0x00
+    || a[0] === 0x4D && a[1] === 0x4D && a[2] === 0x00 && a[3] === 0x2A) return 'image/tiff';
+  if (a[0] === 0x47 && a[1] === 0x49 && a[2] === 0x46 && a[3] === 0x38 && a[4] === 0x37 && a[5] === 0x61
+    || a[0] === 0x47 && a[1] === 0x49 && a[2] === 0x46 && a[3] === 0x38 && a[4] === 0x39 && a[5] === 0x61) return 'image/gif';
+  if (a[0] === 0x00 && a[1] === 0x00 && a[2] === 0x01 && a[3] === 0x00) return 'image/vnd.microsoft.icon';
+  if (a[0] === 0x42 && a[1] === 0x4D) return 'image/bmp';
+  if (a[0] === 0x52 && a[1] === 0x49 && a[2] === 0x46 && a[3] === 0x46
+    && a[8] === 0x57 && a[9] === 0x45 && a[10] === 0x42 && a[11] === 0x50) return 'image/webp';
+  if (a[0] === 0x8A && a[1] === 0x4D && a[2] === 0x4E && a[3] === 0x47
+    && a[4] === 0x0D && a[5] === 0x0A && a[6] === 0x1A && a[7] === 0x0A) return 'image/x-mng';
+  if ((a[0] === 0x3C || a[1] === 0x3C || a[2] === 0x3C) && buf.byteLength > 30) {
+    a = new Uint8Array(buf, buf.byteLength - 16, 16);
+    for (let i = a.length - 1; i > 5; i--) {
+      if (a[i] === 0x3E & a[i - 1] === 0x67 && a[i - 2] === 0x76
+        && a[i - 3] === 0x73 && a[i - 4] === 0x2F && a[i - 5] === 0x3C) return 'image/svg+xml';
+    }
   }
-
-  if (ext === document.getElementById('ext1').value) {
-    ext = document.getElementById('ext2').value;
-  }
-
-  switch(ext) {
-    case 'txt':
-    case 'ini':
-    case 'cs':
-    case 'bas':
-    case 'cls':
-    case 'vb':
-    case 'vbs':
-    case 'rs':
-    case 'php':
-    case 'sh':
-    case 'bat':
-    case 'py': return 'text/plain';
-    case 'htm':
-    case 'html': return 'text/html';
-    case 'css': return 'text/css';
-    case 'csv': return 'text/csv';
-    case 'js':
-    case 'json': return 'text/javascript';
-    case 'xml':
-    case 'yml': return 'text/xml';
-    case 'md': return 'text/markdown';
-
-    case 'png': return 'image/png';
-    case 'jpg':
-    case 'jpeg': return 'image/jpeg';
-    case 'webp': return 'image/webp';
-    case 'tif':
-    case 'tiff': return 'image/tiff';
-    case 'bmp': return 'image/bmp';
-    case 'ico': return 'image/vnd.microsoft.icon';
-    case 'svg': return 'image/svg+xml';
-    default: return '';
-  }
+  return 'text/plain';
 };
 
-document.getElementById('tree').addEventListener('click', (e) => {
+document.getElementById('tree').addEventListener('click', async (e) => {
   if (e.target.tagName === 'BUTTON') {
     e.target.classList.toggle('hide');
     e.target.textContent = e.target.classList.contains('hide') ? '+' : '-';
   } else if (e.target.tagName === 'SPAN') {
-    const element = createElement(e.target.entry);
+    let element;
+    try {
+      element = await createElement(e.target.entry);
+    } catch (err) {
+      element = document.createElement('span');
+      element.textContent = err.message;
+      element.classList.add('err');
+    }
     const view = document.getElementById('view');
     view.innerHTML = '';
     view.appendChild(element);

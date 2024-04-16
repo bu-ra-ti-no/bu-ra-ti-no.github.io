@@ -3,11 +3,12 @@ input {margin: 0.4em}
 #enc {width: 7em}
 #ext1, #ext2 {width: 2em}
 #tree {max-height: 16em; overflow-y: auto; border: 1px solid gray; width: max-content; padding: 3px}
-#fn {color: gray; border: 1px solid #aaa; border-radius: 8px 8px 0 0; padding: 3px}
+#fn {color: gray; border: 1px solid #aaa; border-radius: 8px 8px 0 0; border-bottom-style: none; padding: 3px}
 #fn:empty {display: none}
 #view {contain: size}
-#view * {min-height: 16em; box-sizing: border-box}
-#view textarea {width: 100%}
+#view* {min-height: 16px; box-sizing: border-box}
+#view>.err {background-color: #faa; font: bold 1.5em monospace}
+#view>textarea {min-height: 16em; width: 100%}
 button.hide~ul {display: none}
 button {margin-right: 10px}
 li>button {width: 1.2em; padding: 1px; padding-block: 0; background: transparent; border: 1px solid #aaa}
