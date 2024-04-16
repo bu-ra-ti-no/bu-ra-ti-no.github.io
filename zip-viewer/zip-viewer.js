@@ -61,7 +61,10 @@ const toTree = async (zipReader) => {
   const table = {};
   entries.forEach(e => table[e.filename] = e);
   entries.forEach((e) => {
-    if (e.filename.endsWith('/')) return;
+    if (e.filename.endsWith('/')) {
+      e.entries = [];
+      return;
+    };
     let fn = e.filename;
     while (fn.indexOf('/') > 0) {
       const i = fn.lastIndexOf('/');
